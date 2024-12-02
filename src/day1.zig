@@ -3,10 +3,10 @@ const read_input = @import("main.zig").read_input;
 
 const Allocator = std.mem.Allocator;
 
-fn part1(left: *std.ArrayListAligned(usize, null), right: *std.ArrayListAligned(usize, null)) void {
+fn part1(data: *const Data) void {
     var result: usize = 0;
 
-    for (left.items, right.items) |item1, item2| {
+    for (data.left.items, data.right.items) |item1, item2| {
         var num_inner: usize = 0;
         if (item1 >= item2) {
             num_inner += item1 - item2;
@@ -20,11 +20,11 @@ fn part1(left: *std.ArrayListAligned(usize, null), right: *std.ArrayListAligned(
     std.debug.print("part 1 = {d}\n", .{result});
 }
 
-fn part2(left: *std.ArrayListAligned(usize, null), right: *std.ArrayListAligned(usize, null)) void {
+fn part2(data: *const Data) void {
     var result: usize = 0;
-    for (left.items) |item1| {
+    for (data.left.items) |item1| {
         var multiplicator: usize = 0;
-        for (right.items) |item2| {
+        for (data.right.items) |item2| {
             if (item1 == item2) {
                 multiplicator += 1;
             }
@@ -35,40 +35,57 @@ fn part2(left: *std.ArrayListAligned(usize, null), right: *std.ArrayListAligned(
     std.debug.print("part 2 = {d}\n", .{result});
 }
 
-fn parse_input(input: []const u8, alloc: *const Allocator) !void {
-    var iter = std.mem.splitSequence(u8, input, "\n");
+const Data = struct {
+    left: std.ArrayListAligned(usize, null),
+    right: std.ArrayListAligned(usize, null),
 
-    var left = std.ArrayList(usize).init(alloc.*);
-    var right = std.ArrayList(usize).init(alloc.*);
-    defer left.deinit();
-    defer right.deinit();
+    fn init(alloc: *const Allocator) Data {
+        return Data {
+            .left = std.ArrayList(usize).init(alloc.*),
+            .right = std.ArrayList(usize).init(alloc.*),
+        };
+    }
+
+    fn sort(self: *Data) void {
+        std.mem.sort(usize, self.left.items, {}, comptime std.sort.asc(usize));
+        std.mem.sort(usize, self.right.items, {}, comptime std.sort.asc(usize));
+    }
+
+    fn deinit(self: *const Data) void {
+        self.left.deinit();
+        self.right.deinit();
+    }
+};
+
+fn parse_input(input: []const u8, alloc: *const Allocator) !Data {
+    var iter = std.mem.splitSequence(u8, input, "\n");
+    var data = Data.init(alloc);
 
     while (iter.next()) |line| {
-        var iter2 = std.mem.splitSequence(u8, line, " ");
+        var iter2 = std.mem.tokenizeAny(u8, line, " ");
         var idx: usize = 0;
         while (iter2.next()) |char| {
-            if (char.len > 0) {
-                const num = try std.fmt.parseInt(usize, char, 10);
-                if (idx == 0) {
-                    try left.append(num);
-                } else if (idx == 3) {
-                    try right.append(num);
-                }
+            const num = try std.fmt.parseInt(usize, char, 10);
+            switch (idx) {
+                0 => try data.left.append(num),
+                1 => try data.right.append(num),
+                else => break
             }
             idx += 1;
         }
     }
 
-    std.mem.sort(usize, left.items, {}, comptime std.sort.asc(usize));
-    std.mem.sort(usize, right.items, {}, comptime std.sort.asc(usize));
-
-    part1(&left, &right);
-    part2(&left, &right);
+    data.sort();
+    return data;
 }
 
 pub fn run(alloc: *const Allocator) !void {
     const input = try read_input("puzzle_input/day1.txt", alloc);
     defer alloc.free(input);
 
-    try parse_input(input, alloc);
+    const data = try parse_input(input, alloc);
+    defer data.deinit();
+
+    part1(&data);
+    part2(&data);
 }
