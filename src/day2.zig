@@ -105,8 +105,7 @@ fn dampened_safety_checker(
     accumulator: *usize,
     alloc: *const Allocator
 ) !void {
-    const checked_list = num_list;
-    const safety = try safety_check(checked_list.items, alloc);
+    const safety = try safety_check(num_list.items, alloc);
     std.debug.print("initial | {d}\n", .{num_list.items});
 
     switch (safety.safety) {
