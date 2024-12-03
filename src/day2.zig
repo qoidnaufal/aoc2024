@@ -31,36 +31,45 @@ const DataList = struct {
 
 const Safety = enum {
     Safe,
-    Unsafe
+    Unsafe,
 };
 
 const State = enum {
+    Descending,
     Ascending,
-    Descending
 };
 
-fn safety_check(items: []const usize, alloc: *const Allocator) !Safety {
-    const len = items.len;
-    const checker = try alloc.alloc(State, len - 1);
-    defer alloc.free(checker);
+const Result = struct {
+    idx: usize,
+    safety: Safety
+};
 
-    for (0..checker.len) |idx| {
+fn safety_check(items: []const usize, alloc: *const Allocator) !Result {
+    const len = items.len;
+    const state = try alloc.alloc(State, len - 1);
+    defer alloc.free(state);
+
+    for (0..state.len) |idx| {
         const curr: isize = @intCast(items[idx]);
         const next: isize = @intCast(items[idx + 1]);
-        const delta: usize = @abs(curr - next);
+
+        const delta_next: usize = @abs(curr - next);
 
         switch (next > curr) {
-            true => checker[idx] = State.Ascending,
-            false => checker[idx] = State.Descending,
+            true => state[idx] = .Ascending,
+            false => state[idx] = .Descending,
         }
 
-        if (delta > 3 or delta < 1) {
-            return Safety.Unsafe;
-        } else if (idx > 0 and checker[idx - 1] != checker[idx]) {
-            return Safety.Unsafe;
+        if (delta_next > 3 or delta_next < 1) {
+            return .{ .idx = idx + 1, .safety = .Unsafe };
+        }
+        
+        if (idx > 0 and state[idx - 1] != state[idx]) {
+            return .{ .idx = idx + 1, .safety = .Unsafe };
         }
     }
-    return Safety.Safe;
+
+    return .{ .idx = 0, .safety = .Safe };
 }
 
 fn parse_input(input: []const u8, alloc: *const Allocator) !DataList {
@@ -82,13 +91,60 @@ fn parse_input(input: []const u8, alloc: *const Allocator) !DataList {
 
 fn part1(datalist: *const DataList, alloc: *const Allocator) !void {
     var accumulator: usize = 0;
-    for (datalist.items()) |arr| {
-        const safety = try safety_check(arr.items, alloc);
-        if (safety == Safety.Safe) {
+    for (datalist.items()) |num_list| {
+        const safety = try safety_check(num_list.items, alloc);
+        if (safety.safety == .Safe) {
             accumulator += 1;
         }
     }
     std.debug.print("part 1 = {d}\n", .{accumulator});
+}
+
+fn dampened_safety_checker(
+    num_list: std.ArrayListAligned(usize, null),
+    accumulator: *usize,
+    alloc: *const Allocator
+) !void {
+    const checked_list = num_list;
+    const safety = try safety_check(checked_list.items, alloc);
+    std.debug.print("initial | {d}\n", .{num_list.items});
+
+    switch (safety.safety) {
+        .Unsafe => {
+            defer std.debug.print("terminated\n", .{});
+            for (0..num_list.items.len) |idx| {
+                var new_list = try num_list.clone();
+                defer new_list.deinit();
+
+                _ = new_list.orderedRemove(idx);
+                std.debug.print("attempt | {d}\n", .{new_list.items});
+                const safety_2 = try safety_check(new_list.items, alloc);
+
+                switch (safety_2.safety) {
+                    .Unsafe => {
+                    },
+                    .Safe => {
+                        std.debug.print("safe\n", .{});
+                        accumulator.* += 1;
+                        return;
+                    },
+                }
+            }
+        },
+        .Safe => {
+            std.debug.print("safe\n", .{});
+            accumulator.* += 1;
+        }
+    }
+}
+
+fn part2(datalist: *const DataList, alloc: *const Allocator) !void {
+    var accumulator: usize = 0;
+    for (datalist.items()) |num_list| {
+        try dampened_safety_checker(num_list, &accumulator, alloc);
+    }
+
+    std.debug.print("part 2 = {d}\n", .{accumulator});
 }
 
 pub fn run(alloc: *const Allocator) !void {
@@ -99,4 +155,5 @@ pub fn run(alloc: *const Allocator) !void {
     defer datalist.deinit();
 
     try part1(&datalist, alloc);
+    try part2(&datalist, alloc);
 }
