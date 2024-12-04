@@ -43,18 +43,18 @@ const Pair = struct {
     }
 };
 
-fn parse_input(input: []const u8, alloc: *const Allocator) !Pair {
-    var pair = Pair.init(alloc);
+fn part1(input: []const u8) !void {
+    var accumulator: usize = 0;
 
     var iter = std.mem.splitAny(u8, input, "\n");
     while (iter.next()) |line| {
-        try scan_line(line, &pair);
+        try scan_line(line, &accumulator);
     }
 
-    return pair;
+    std.debug.print("{d}", .{ accumulator });
 }
 
-fn scan_line(line: []const u8, pair: *Pair) !void {
+fn scan_line(line: []const u8, accumulator: *usize) !void {
     var cursor: usize = 0;
     while (cursor < line.len): (cursor += 1) {
         if (line[cursor] != 'm') continue;
@@ -72,27 +72,16 @@ fn scan_line(line: []const u8, pair: *Pair) !void {
         if (token2.len > 3) continue;
 
         std.debug.print("token: {s},{s}\n", .{token1, token2});
-        pair.appendFromToken(token1, token2) catch continue;
+        const num1 = std.fmt.parseInt(u32, token1, 10) catch continue;
+        const num2 = std.fmt.parseInt(u32, token2, 10) catch continue;
+        accumulator.* += num1 * num2;
     }
 }
 
-fn part1(pair: *const Pair) !void {
-    var accumulator: usize = 0;
-
-    for (0..try pair.len()) |idx| {
-        const mul = pair.multiply(idx);
-        accumulator += mul;
-    }
-
-    std.debug.print("{d}\n", .{ accumulator });
-}
 
 pub fn run(alloc: *const Allocator) !void {
     const input = try read_input("puzzle_input/day3.txt", alloc);
     defer alloc.free(input);
 
-    const pair = try parse_input(input, alloc);
-    defer pair.deinit();
-
-    try part1(&pair);
+    try part1(input);
 }
