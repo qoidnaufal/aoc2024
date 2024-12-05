@@ -35,18 +35,28 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
 
-    if (args.len == 1) {
-        std.debug.print("Can't show any result, specify which day to run! (eg: day1, day2, etc)\n", .{});
-    } else {
-        const day = std.meta.stringToEnum(Day, args[1]);
-        if (day) |d| {
-            switch (d) {
+    switch (args.len) {
+        1 => std.debug.print(
+            "Can't show any result, specify which day to run! (eg: day1, day2, etc)\n",
+            .{}
+        ),
+        2 => {
+            const day = std.meta.stringToEnum(Day, args[1]) orelse {
+                std.debug.print(
+                    "Wrong args: [{s}]! Specify which day to run! (eg: day1, day2, etc)\n",
+                    .{args[1]}
+                );
+                return;
+            };
+            switch (day) {
                 .day1 => try day1.run(&alloc),
                 .day2 => try day2.run(&alloc),
                 .day3 => try day3.run(&alloc),
             }
-        } else {
-            std.debug.print("{s} is not available yet!\n", .{args[1]});
-        }
+        },
+        else => std.debug.print(
+            "Too many args! Specify which day to run! (eg: day1, or day2, etc)\n",
+            .{}
+        )
     }
 }

@@ -3,85 +3,113 @@ const read_input = @import("main.zig").read_input;
 
 const Allocator = std.mem.Allocator;
 
-const Pair = struct {
-    left: std.ArrayListAligned(u32, null),
-    right: std.ArrayListAligned(u32, null),
+const State = enum {
+    Scan,
+    Parse,
+};
 
-    const DataErr = error{
-        UnequalLeftHasMoreItems,
-        UnequalRightHasMoreItems,
-    };
+const Command = enum {
+    Do,
+    Dont
+};
+
+const Accumulator = struct {
+    command: Command,
+    state: State,
+    part1: u32,
+    part2: u32,
 
     const Self = @This();
-    fn init(alloc: *const Allocator) Self {
-        return Self {
-            .left =  std.ArrayList(u32).init(alloc.*),
-            .right = std.ArrayList(u32).init(alloc.*)
-        };
+
+    fn setCommand(self: *Self, command: Command) void {
+        self.command = command;
     }
 
-    fn deinit(self: *const Self) void {
-        self.left.deinit();
-        self.right.deinit();
-    }
-
-    fn appendFromToken(self: *Self, token1: []const u8, token2: []const u8) !void {
-        const num1 = try std.fmt.parseInt(u32, token1, 10);
-        const num2 = try std.fmt.parseInt(u32, token2, 10);
-        try self.left.append(num1);
-        try self.right.append(num2);
-    }
-
-    fn len(self: *const Self) DataErr!usize {
-        if (self.left.items.len > self.right.items.len) return DataErr.UnequalLeftHasMoreItems;
-        if (self.left.items.len < self.right.items.len) return DataErr.UnequalRightHasMoreItems;
-        return self.left.items.len;
-    }
-
-    fn multiply(self: *const Self, idx: usize) u32 {
-        return self.left.items[idx] * self.right.items[idx];
+    fn accumulate(self: *Self, num: u32) void {
+        self.part1 += num;
+        if (self.command == .Do) self.part2 += num;
     }
 };
 
-fn part1(input: []const u8) !void {
-    var accumulator: usize = 0;
+fn solve(input: []const u8) void {
+    var acc = Accumulator {
+            .state = .Scan,
+            .command = .Do,
+            .part1 = 0,
+            .part2 = 0
+        };
 
     var iter = std.mem.splitAny(u8, input, "\n");
+    var line_number: u8 = 0;
+
     while (iter.next()) |line| {
-        try scan_line(line, &accumulator);
+        std.debug.print(">> New scan: {d}\n", .{line_number});
+        scan_line(line, &acc);
+        line_number += 1;
     }
 
-    std.debug.print("{d}", .{ accumulator });
+    // part 1: 157621318
+    // part 2: 79845780
+    std.debug.print("part1 = {d}, part2 = {d}\n", .{ acc.part1, acc.part2 });
 }
 
-fn scan_line(line: []const u8, accumulator: *usize) !void {
+fn scan_line(line: []const u8, acc: *Accumulator) void {
     var cursor: usize = 0;
+
     while (cursor < line.len): (cursor += 1) {
-        if (line[cursor] != 'm') continue;
+        switch (acc.state) {
+            .Scan => {
+                if (std.mem.startsWith(u8, line[cursor..], "mul(")) {
+                    cursor += 3;
+                    acc.state = .Parse;
+                    continue;
+                }
 
-        const mul = line[cursor..cursor + 3];
-        if (std.mem.eql(u8, mul, "mul")) cursor += 3;
-        if (line[cursor] != '(') continue;
+                if (std.mem.startsWith(u8, line[cursor..], "do()")) {
+                    std.debug.print(">> {s}\n", .{line[cursor..cursor + 4]});
+                    cursor += 3;
+                    acc.setCommand(.Do);
+                }
 
-        const comma = std.mem.indexOfScalar(u8, line[cursor..], ',') orelse continue;
-        const token1 = line[cursor + 1..cursor + comma];
-        if (token1.len > 3) continue;
+                if (std.mem.startsWith(u8, line[cursor..], "don't()")) {
+                    std.debug.print(">> {s}\n", .{line[cursor..cursor + 7]});
+                    cursor += 6;
+                    acc.setCommand(.Dont);
+                }
+            },
+            .Parse => {
+                // when we arrive here, we know the cursor is currently pointing after '('
+                const comma = std.mem.indexOfScalar(u8, line[cursor..], ',') orelse break;
+                const token1 = line[cursor..cursor + comma];
+                const num1 = std.fmt.parseInt(u32, token1, 10) catch {
+                    cursor -= 1;
+                    acc.state = .Scan;
+                    continue;
+                };
+                cursor += comma + 1;
 
-        const close = std.mem.indexOfScalar(u8, line[cursor + comma..], ')') orelse continue;
-        const token2 = line[cursor + comma + 1..cursor + comma + close];
-        if (token2.len > 3) continue;
+                const close = std.mem.indexOfScalar(u8, line[cursor..], ')') orelse break;
+                const token2 = line[cursor..cursor + close];
+                const num2 = std.fmt.parseInt(u32, token2, 10) catch {
+                    cursor -= 1;
+                    acc.state = .Scan;
+                    continue;
+                };
+                std.debug.print("   command: {}, token: {d},{d}\n", .{acc.command, num1, num2});
 
-        std.debug.print("token: {s},{s}\n", .{token1, token2});
-        const num1 = std.fmt.parseInt(u32, token1, 10) catch continue;
-        const num2 = std.fmt.parseInt(u32, token2, 10) catch continue;
-        accumulator.* += num1 * num2;
+                // make sure on next scan we don't miss any mul(, do() or don't()
+                cursor += close;
+
+                acc.accumulate(num1 * num2);
+                acc.state = .Scan;
+            },
+        }
     }
 }
-
 
 pub fn run(alloc: *const Allocator) !void {
     const input = try read_input("puzzle_input/day3.txt", alloc);
     defer alloc.free(input);
 
-    try part1(input);
+    solve(input);
 }
