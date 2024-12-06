@@ -8,13 +8,12 @@ pub fn build(b: *std.Build) void {
         .name = "aoc2024",
         .target = target,
         .optimize = optimize,
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("src-zig/main.zig"),
     });
+
     b.installArtifact(exe);
 
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    const cargo_cmd = b.addSystemCommand(&.{"cargo", "build"});
+    exe.step.dependOn(&cargo_cmd.step);
+    exe.addObjectFile(b.path("target/debug/librust_helper.a"));
 }

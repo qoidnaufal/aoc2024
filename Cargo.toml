@@ -1,0 +1,10 @@
+[package]
+name = "aoc2024"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[lib]
+name = "rust_helper"
+crate-type = ["staticlib"]
