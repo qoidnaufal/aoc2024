@@ -3,6 +3,7 @@ const std = @import("std");
 const day1 = @import("day1.zig");
 const day2 = @import("day2.zig");
 const day3 = @import("day3.zig");
+const day4 = @import("day4.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -24,7 +25,8 @@ pub fn read_input(file_path: []const u8, alloc: *const Allocator) ![]const u8 {
 const Day = enum {
     day1,
     day2,
-    day3
+    day3,
+    day4,
 };
 
 pub fn main() !void {
@@ -52,6 +54,7 @@ pub fn main() !void {
                 .day1 => try day1.run(&alloc),
                 .day2 => try day2.run(&alloc),
                 .day3 => try day3.run(&alloc),
+                .day4 => try day4.run(&alloc),
             }
         },
         else => std.debug.print(
