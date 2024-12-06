@@ -4,9 +4,7 @@ const Allocator = std.mem.Allocator;
 
 fn parseInput(input: []const u8, alloc: *const Allocator) !std.ArrayListAligned([]const u8, null) {
     var iter = std.mem.splitScalar(u8, input, '\n');
-
     var array = std.ArrayList([]const u8).init(alloc.*);
-
     while (iter.next()) |line| {
         if (line.len > 0) try array.append(line);
     }
@@ -17,7 +15,7 @@ fn parseInput(input: []const u8, alloc: *const Allocator) !std.ArrayListAligned(
 const XMAS_LEN = 4;
 const MAS_LEN = 3;
 
-fn part1(array: [][]const u8) void {
+fn solve(array: [][]const u8) void {
     var counter_part1: usize = 0;
     var counter_part2: usize = 0;
 
@@ -26,10 +24,7 @@ fn part1(array: [][]const u8) void {
             // look horizontally
             if (cursor > 2) {
                 const horizontal = array[line_idx][cursor - 3..cursor + 1];
-                if (std.mem.eql(u8, horizontal, "XMAS") or std.mem.eql(u8, horizontal, "SAMX")) {
-                    counter_part1 += 1;
-                    // std.debug.print("hz | line: {d}, cursor: {d} => {s}\n", .{line_idx, cursor - 3, horizontal});
-                }
+                if (std.mem.eql(u8, horizontal, "XMAS") or std.mem.eql(u8, horizontal, "SAMX")) counter_part1 += 1;
             }
 
             // look vertically and diagonally
@@ -46,18 +41,9 @@ fn part1(array: [][]const u8) void {
                     }
                 }
 
-                if (std.mem.eql(u8, &vtBuffer, "XMAS") or std.mem.eql(u8, &vtBuffer, "SAMX")) {
-                    counter_part1 += 1;
-                    // std.debug.print("vt | line: {d}, cursor: {d} => {s}\n", .{line_idx, cursor, vtBuffer});
-                }
-                if (std.mem.eql(u8, &drBuffer, "XMAS") or std.mem.eql(u8, &drBuffer, "SAMX")) {
-                    counter_part1 += 1;
-                    // std.debug.print("dr | line: {d}, cursor: {d} => {s}\n", .{line_idx, cursor, drBuffer});
-                }
-                if (std.mem.eql(u8, &dlBuffer, "XMAS") or std.mem.eql(u8, &dlBuffer, "SAMX")) {
-                    counter_part1 += 1;
-                    // std.debug.print("dl | line: {d}, cursor: {d} => {s}\n", .{line_idx, cursor, dlBuffer});
-                }
+                if (std.mem.eql(u8, &vtBuffer, "XMAS") or std.mem.eql(u8, &vtBuffer, "SAMX")) counter_part1 += 1;  
+                if (std.mem.eql(u8, &drBuffer, "XMAS") or std.mem.eql(u8, &drBuffer, "SAMX")) counter_part1 += 1;
+                if (std.mem.eql(u8, &dlBuffer, "XMAS") or std.mem.eql(u8, &dlBuffer, "SAMX")) counter_part1 += 1;
             }
 
             if (line_idx < array.len - 2 and cursor < array[line_idx].len - 2) {
@@ -72,15 +58,13 @@ fn part1(array: [][]const u8) void {
                 if (
                     (std.mem.eql(u8, &drBuffer, "MAS") or std.mem.eql(u8, &drBuffer, "SAM"))
                     and (std.mem.eql(u8, &dlBuffer, "MAS") or std.mem.eql(u8, &dlBuffer, "SAM"))
-                ) {
-                    counter_part2 += 1;
-                    std.debug.print("dr | line: {d}, cursor: {d} => {s} x {s}\n", .{line_idx, cursor, drBuffer, dlBuffer});
-                }
+                ) counter_part2 += 1;
             }
         }
     }
 
     // 2654
+    // 1990
     std.debug.print("part 1 = {d}, part 2 = {d}\n", .{counter_part1, counter_part2});
 }
 
@@ -91,5 +75,5 @@ pub fn run(alloc: *const Allocator) !void {
     const array = try parseInput(input, alloc);
     defer array.deinit();
 
-    part1(array.items);
+    solve(array.items);
 }
