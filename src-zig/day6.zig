@@ -66,7 +66,7 @@ const Map = struct {
     fn nextDirection(self: *const Self) @TypeOf(self.cursor) {
         switch (self.cursor.direction) {
             .Up => return .{
-                .idx = self.cursor.idx - self.height,
+                .idx = self.cursor.idx - self.width,
                 .direction = self.cursor.direction
             },
             .Right => return .{
@@ -74,7 +74,7 @@ const Map = struct {
                 .direction = self.cursor.direction
             },
             .Down => return .{
-                .idx = self.cursor.idx + self.height,
+                .idx = self.cursor.idx + self.width,
                 .direction = self.cursor.direction
             },
             .Left => return .{
@@ -135,9 +135,9 @@ fn part1(map: *Map, alloc: *const Allocator) !void {
             grid[idx] = 'X';
         }
         std.debug.print("{d}\r", .{counter});
-        if (counter % 5000 == 0) std.debug.print("\n", .{});
+        if (counter % 3000 == 0) std.debug.print("\n", .{});
         map.moveCursor();
-        // if (counter % 5355 == 0) break;
+        // if (counter % 4 == 0) break;
     }
 
     const last_idx = map.cursor.idx;
@@ -150,7 +150,7 @@ fn part1(map: *Map, alloc: *const Allocator) !void {
 
     // 5317 -> too low
     std.debug.print(
-        "[Terminated], final pos: [{d}, {d}] {} total visited: {d}\n",
+        "[Terminated], final pos: [{d}, {d}] {} total visited: {X}\n",
         .{(last_idx - (last_idx % map.width)) / map.height, last_idx % map.width, map.cursor.direction, counter}
     );
 
