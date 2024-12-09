@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .ReleaseSafe });
 
     const exe = b.addExecutable(.{
         .name = "aoc2024",
@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
-    const cargo_cmd = b.addSystemCommand(&.{"cargo", "build"});
+    const cargo_cmd = b.addSystemCommand(&.{"cargo", "build", "--release"});
     exe.step.dependOn(&cargo_cmd.step);
-    exe.addObjectFile(b.path("target/debug/librust_helper.a"));
+    exe.addObjectFile(b.path("target/release/librust_helper.a"));
 }

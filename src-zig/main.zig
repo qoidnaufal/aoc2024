@@ -5,6 +5,7 @@ const day2 = @import("day2.zig");
 const day3 = @import("day3.zig");
 const day4 = @import("day4.zig");
 const day5 = @import("day5.zig");
+const day6 = @import("day6.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -29,6 +30,7 @@ const Day = enum {
     day3,
     day4,
     day5,
+    day6,
 };
 
 pub fn main() !void {
@@ -58,6 +60,7 @@ pub fn main() !void {
                 .day3 => try day3.run(&alloc),
                 .day4 => try day4.run(&alloc),
                 .day5 => try day5.run(&alloc),
+                .day6 => try day6.run(&alloc),
             }
         },
         else => std.debug.print(
