@@ -136,39 +136,38 @@ fn part1(map: *Map, alloc: *const Allocator) !void {
 
     const start_idx = map.cursor.idx;
 
-    var counter: usize = 0;
+    // turns out, the start position needs to be included first
+    // and also, the tracking is terminated when the cursor is hitting the edge
+    var counter: usize = 1;
     while (map.canMove()) {
         const idx = map.nextDirection().idx;
-        if (grid[idx] == '.' or grid[idx] == map.data.items[start_idx]) {
+        if (grid[idx] == '.') {
             counter += 1;
-            grid[idx] = 'X';
         }
+        grid[idx] = map.cursor.direction.to_char();
 
-        // tbh, im not too clear with the rules / example
-        // is it to break when hitting the edge & only change direction when hitting #
-        // or, you can also change direction when hitting the edge?
-        //
-        // the problem is, i get into an infinite loop when i change direction on hitting the edge
         map.moveCursor();
         if (map.isHittingEdge()) break;
         if (map.nextSpot() == '#') map.changeDirection();
     }
 
     const last_idx = map.cursor.idx;
-    grid[last_idx] = map.cursor.direction.to_char();
+    grid[last_idx] = 'E';
 
+    // part 1 = 5318
     std.debug.print(
         "[Terminated], final pos: [{d}, {d}] {} total visited: {}\n",
         .{(last_idx - (last_idx % map.width)) / map.height, last_idx % map.width, map.cursor.direction, counter}
     );
 
-    printFinalGrid(grid, start_idx, last_idx, map);
+    printFinalGrid(&grid, start_idx, last_idx, map);
 }
 
-fn printFinalGrid(grid: []u8, start_idx: usize, last_idx: usize, map: *const Map) void {
+fn printFinalGrid(grid: *[]u8, start_idx: usize, last_idx: usize, map: *const Map) void {
     var line_count: usize = 0;
     var row_count: usize = 0;
-    for (grid) |c| {
+    grid.*[start_idx] = 'S';
+    for (grid.*) |c| {
         if (row_count % map.width == 0) {
             std.debug.print("{d: >4} | ", .{line_count});
             line_count += 1;
