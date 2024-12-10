@@ -13,6 +13,7 @@ pub fn read_input(file_path: []const u8, alloc: *const Allocator) ![]const u8 {
     var path_buffer: [1024]u8 = undefined;
     const path = try std.fs.realpath(file_path, &path_buffer);
     var file = try std.fs.openFileAbsolute(path, .{.mode = .read_only});
+    errdefer file.close();
     defer file.close();
 
     const file_size = (try file.metadata()).size();
@@ -36,10 +37,12 @@ const Day = enum {
 pub fn main() !void {
     var gp = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gp.deinit();
+    errdefer _ = gp.deinit();
     const alloc = gp.allocator();
 
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
+    errdefer std.process.argsFree(alloc, args);
 
     switch (args.len) {
         1 => std.debug.print(

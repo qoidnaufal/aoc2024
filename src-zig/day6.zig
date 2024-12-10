@@ -23,6 +23,17 @@ const Direction = enum {
             else => return error.InvalidChar,
         }
     }
+
+    fn to_char(self: Self) u8 {
+        const char: u8 = switch (self) {
+           Self.Up  => '^',
+           Self.Right  => '>',
+           Self.Down  => 'v',
+           else  => '<',
+        };
+
+        return char;
+    }
 };
 
 const Map = struct {
@@ -86,8 +97,6 @@ const Map = struct {
 
     fn moveCursor(self: *Self) void {
         self.cursor = self.nextDirection();
-        if (self.isHittingEdge() or self.nextSpot() == '#') self.changeDirection();
-        // if (self.nextSpot() == '#') self.changeDirection();
     }
 
     fn changeDirection(self: *Self) void {
@@ -103,8 +112,8 @@ const Map = struct {
         const hittin_gedge = (
             (self.cursor.idx % self.width == 0 and self.cursor.direction == .Left)
             or (self.cursor.idx % self.width == self.width - 1 and self.cursor.direction == .Right)
-            or ((self.cursor.idx - (self.cursor.idx % self.width)) == 0 and self.cursor.direction == .Up)
-            or ((self.cursor.idx - (self.cursor.idx % self.width)) == self.width * (self.height - 1) and self.cursor.direction == .Down)
+            or (self.cursor.idx < self.width and self.cursor.direction == .Up)
+            or (self.cursor.idx >= self.width * (self.height - 1) and self.cursor.direction == .Down)
         );
         return hittin_gedge;
     }
@@ -115,7 +124,7 @@ const Map = struct {
     }
 
     fn canMove(self: *const Self) bool {
-        if (self.isHittingEdge() or self.nextSpot() == '#') return false;
+        if (self.nextSpot() == '#') return false;
         return true;
     }
 };
@@ -134,35 +143,38 @@ fn part1(map: *Map, alloc: *const Allocator) !void {
             counter += 1;
             grid[idx] = 'X';
         }
-        std.debug.print("{d}\r", .{counter});
-        if (counter % 3000 == 0) std.debug.print("\n", .{});
+
+        // tbh, im not too clear with the rules / example
+        // is it to break when hitting the edge & only change direction when hitting #
+        // or, you can also change direction when hitting the edge?
+        //
+        // the problem is, i get into an infinite loop when i change direction on hitting the edge
         map.moveCursor();
-        // if (counter % 4 == 0) break;
+        if (map.isHittingEdge()) break;
+        if (map.nextSpot() == '#') map.changeDirection();
     }
 
     const last_idx = map.cursor.idx;
-    grid[last_idx] = switch (map.cursor.direction) {
-        .Up => '^',
-        .Right => '>',
-        .Down => 'v',
-        .Left => '<'
-    };
+    grid[last_idx] = map.cursor.direction.to_char();
 
-    // 5317 -> too low
     std.debug.print(
-        "[Terminated], final pos: [{d}, {d}] {} total visited: {X}\n",
+        "[Terminated], final pos: [{d}, {d}] {} total visited: {}\n",
         .{(last_idx - (last_idx % map.width)) / map.height, last_idx % map.width, map.cursor.direction, counter}
     );
 
-    var row_count: usize = 0;
+    printFinalGrid(grid, start_idx, last_idx, map);
+}
+
+fn printFinalGrid(grid: []u8, start_idx: usize, last_idx: usize, map: *const Map) void {
     var line_count: usize = 0;
+    var row_count: usize = 0;
     for (grid) |c| {
         if (row_count % map.width == 0) {
             std.debug.print("{d: >4} | ", .{line_count});
             line_count += 1;
         }
-        std.debug.print("{c}", .{c});
         row_count += 1;
+        std.debug.print("{c}", .{c});
         if (row_count % map.width == 0) {
             if (line_count * map.width == start_idx - (start_idx % map.width) + map.width) std.debug.print(" <<-- Start", .{});
             if (line_count * map.width == last_idx - (last_idx % map.width) + map.width) std.debug.print(" <<-- End", .{});
@@ -174,7 +186,6 @@ fn part1(map: *Map, alloc: *const Allocator) !void {
 fn parse_input(input: []const u8, alloc: *const Allocator) !Map {
     var iter = std.mem.splitScalar(u8, input, '\n');
     var map = Map.init(alloc);
-    errdefer map.deinit();
 
     var height: usize = 0;
     while (iter.next()) |line| {
@@ -190,7 +201,6 @@ fn parse_input(input: []const u8, alloc: *const Allocator) !Map {
         }
     }
     map.height = height;
-    // std.debug.print("{}\n", .{map});
     return map;
 }
 
