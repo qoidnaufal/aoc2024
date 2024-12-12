@@ -8,19 +8,15 @@ const Direction = enum {
     Left,
     Down,
 
-    const PointerParseError = error{
-        InvalidChar,
-    };
-
     const Self = @This();
 
-    fn from(ptr: u8) PointerParseError!Self {
+    fn from(ptr: u8) ?Self {
         switch (ptr) {
             '^' => return .Up,
             '>' => return .Right,
             'v' => return .Down,
             '<' => return .Left,
-            else => return error.InvalidChar,
+            else => return null,
         }
     }
 
@@ -34,12 +30,34 @@ const Direction = enum {
 
         return char;
     }
+
+    fn rotate(self: Self) Self {
+        return switch (self) {
+            .Up => .Right,
+            .Right => .Down,
+            .Down => .Left,
+            else => .Up,
+        };
+    }
+
+    fn isNinetyDegree(self: Self, other: Self) bool {
+        const is_it = switch (self) {
+           Self.Up  => other == .Right,
+           Self.Right  => other == .Down,
+           Self.Down  => other == .Left,
+           else  => other == .Up,
+        };
+
+        return is_it;
+    }
 };
 
 const Map = struct {
     data: std.ArrayListAligned(u8, null),
     width: usize,
     height: usize,
+    start_idx: usize,
+    last_idx: usize,
     cursor: struct {
         idx: usize,
         direction: Direction,
@@ -52,6 +70,8 @@ const Map = struct {
             .data = std.ArrayList(u8).init(alloc.*),
             .width = 0,
             .height = 0,
+            .start_idx = 0,
+            .last_idx = 0,
             .cursor = .{
                 .idx = 0,
                 .direction = .Up,
@@ -67,119 +87,149 @@ const Map = struct {
         try self.data.append(char);
     }
 
+    fn printFinalGrid(self: *Self) void {
+        self.data.items[self.last_idx] = 'E';
+        self.data.items[self.start_idx] = 'S';
+
+        var line_count: usize = 0;
+        var row_count: usize = 0;
+        for (self.data.items) |c| {
+            if (row_count % self.width == 0) {
+                std.debug.print("{d: >4} | ", .{line_count});
+                line_count += 1;
+            }
+            row_count += 1;
+            std.debug.print("{c}", .{c});
+            if (row_count % self.width == 0) {
+                if (line_count == (self.start_idx - (self.start_idx % self.width)) / self.width + 1) std.debug.print(" <<-- Start", .{});
+                if (line_count == (self.last_idx - (self.last_idx % self.width)) / self.width + 1) std.debug.print(" <<-- End", .{});
+                std.debug.print("\n", .{});
+            }
+        }
+    }
+
     fn setCursor(self: *Self, idx: usize, direction: Direction) void {
+        self.start_idx = idx;
         self.cursor = .{
             .idx = idx,
             .direction = direction,
         };
     }
 
-    fn nextDirection(self: *const Self) @TypeOf(self.cursor) {
+    fn nextIndex(self: *const Self) usize {
         switch (self.cursor.direction) {
-            .Up => return .{
-                .idx = self.cursor.idx - self.width,
-                .direction = self.cursor.direction
-            },
-            .Right => return .{
-                .idx = self.cursor.idx + 1,
-                .direction = self.cursor.direction
-            },
-            .Down => return .{
-                .idx = self.cursor.idx + self.width,
-                .direction = self.cursor.direction
-            },
-            .Left => return .{
-                .idx = self.cursor.idx - 1,
-                .direction = self.cursor.direction
-            },
+            .Up => return self.cursor.idx - self.width,
+            .Right => return self.cursor.idx + 1,
+            .Down => return self.cursor.idx + self.width,
+            .Left => return self.cursor.idx - 1,
         }
-    }
-
-    fn moveCursor(self: *Self) void {
-        self.cursor = self.nextDirection();
     }
 
     fn changeDirection(self: *Self) void {
-        switch (self.cursor.direction) {
-            .Up => self.cursor.direction = .Right,
-            .Right => self.cursor.direction = .Down,
-            .Down => self.cursor.direction = .Left,
-            .Left => self.cursor.direction = .Up,
-        }
+        self.cursor.direction = self.cursor.direction.rotate();
     }
 
     fn isHittingEdge(self: *const Self) bool {
-        const hittin_gedge = (
-            (self.cursor.idx % self.width == 0 and self.cursor.direction == .Left)
+        return (self.cursor.idx % self.width == 0 and self.cursor.direction == .Left)
             or (self.cursor.idx % self.width == self.width - 1 and self.cursor.direction == .Right)
             or (self.cursor.idx < self.width and self.cursor.direction == .Up)
-            or (self.cursor.idx >= self.width * (self.height - 1) and self.cursor.direction == .Down)
-        );
-        return hittin_gedge;
+            or (self.cursor.idx >= self.width * (self.height - 1) and self.cursor.direction == .Down);
     }
 
     fn nextSpot(self: *const Self) u8 {
-        const next = self.data.items[self.nextDirection().idx];
-        return next;
+        return self.data.items[self.nextIndex()];
     }
 
-    fn canMove(self: *const Self) bool {
-        if (self.nextSpot() == '#') return false;
-        return true;
+    fn intersect(self: *const Self) usize {
+        return switch (self.cursor.direction) {
+            .Up => self.cursor.idx + 1,
+            .Right => self.cursor.idx + self.width,
+            .Down => self.cursor.idx - 1,
+            .Left => self.cursor.idx - self.width,
+        };
+    }
+
+    // obstruction must have been visited with same direction
+    fn anticipateLoop(self: *const Self, buffer: *const []usize) bool {
+        const curr = self.cursor.direction;
+        var is_it = false;
+        for (buffer.*) |u| {
+            switch (curr) {
+                .Up, => {
+                    if (self.cursor.idx - (self.cursor.idx % self.width) == u - (u % self.width)
+                        and self.cursor.idx < u
+                    ) {
+                        is_it = true;
+                        break;
+                    }
+                },
+                .Down => {
+                    if (self.cursor.idx - (self.cursor.idx % self.width) == u - (u % self.width)
+                        and self.cursor.idx > u
+                    ) {
+                        is_it = true;
+                        break;
+                    }
+                },
+                .Left => {
+                    if (self.cursor.idx % self.width == u % self.width
+                        and self.cursor.idx > u
+                    ) {
+                        is_it = true;
+                        break;
+                    }
+                },
+                else => {
+                    if (self.cursor.idx % self.width == u % self.width
+                        and self.cursor.idx < u
+                    ) {
+                        is_it = true;
+                        break;
+                    }
+                }
+            }
+        }
+        const sect = Direction.from(self.data.items[self.intersect()]) orelse self.cursor.direction;
+        return (curr.isNinetyDegree(sect) or is_it) and self.nextSpot() != '#';
     }
 };
 
-fn part1(map: *Map, alloc: *const Allocator) !void {
-    var grid = try alloc.dupe(u8, @constCast(map.data.items));
-    errdefer alloc.free(grid);
-    defer alloc.free(grid);
+const Result = struct {
+    visited: usize,
+    loop: usize,
+};
 
-    const start_idx = map.cursor.idx;
+fn solve(map: *Map, alloc: *const Allocator, print: Print) !Result {
+    var wallCount: usize = 0;
+    var wallHitBuffer = try alloc.alloc(usize, map.width * map.height);
+    defer alloc.free(wallHitBuffer);
 
-    // turns out, the start position needs to be included first
-    // and also, the tracking is terminated when the cursor is hitting the edge
-    var counter: usize = 1;
-    while (map.canMove()) {
-        const idx = map.nextDirection().idx;
-        if (grid[idx] == '.') {
-            counter += 1;
+    var visited: usize = 1;
+    var loop: usize = 0;
+    while (!map.isHittingEdge()) {
+        if (map.nextSpot() == '#') {
+            wallHitBuffer[wallCount] = map.nextIndex();
+            wallCount += 1;
+            map.changeDirection();
         }
-        grid[idx] = map.cursor.direction.to_char();
 
-        map.moveCursor();
-        if (map.isHittingEdge()) break;
-        if (map.nextSpot() == '#') map.changeDirection();
+        const next = map.nextIndex();
+        if (map.data.items[next] == '.') visited += 1;
+        if (map.anticipateLoop(&wallHitBuffer[0..wallCount])) {
+            std.debug.print("blocker: {}\n", .{next});
+            loop += 1;
+        }
+
+        map.data.items[next] = map.cursor.direction.to_char();
+        map.cursor.idx = next;
     }
 
-    const last_idx = map.cursor.idx;
-    grid[last_idx] = 'E';
-
-    // part 1 = 5318
-    std.debug.print(
-        "[Terminated], final pos: [{d}, {d}] {} total visited: {}\n",
-        .{(last_idx - (last_idx % map.width)) / map.height, last_idx % map.width, map.cursor.direction, counter}
-    );
-
-    printFinalGrid(&grid, start_idx, last_idx, map);
-}
-
-fn printFinalGrid(grid: *[]u8, start_idx: usize, last_idx: usize, map: *const Map) void {
-    var line_count: usize = 0;
-    var row_count: usize = 0;
-    grid.*[start_idx] = 'S';
-    for (grid.*) |c| {
-        if (row_count % map.width == 0) {
-            std.debug.print("{d: >4} | ", .{line_count});
-            line_count += 1;
-        }
-        row_count += 1;
-        std.debug.print("{c}", .{c});
-        if (row_count % map.width == 0) {
-            if (line_count * map.width == start_idx - (start_idx % map.width) + map.width) std.debug.print(" <<-- Start", .{});
-            if (line_count * map.width == last_idx - (last_idx % map.width) + map.width) std.debug.print(" <<-- End", .{});
-            std.debug.print("\n", .{});
-        }
+    map.last_idx = map.cursor.idx;
+    switch (print) {
+        .Yes => map.printFinalGrid(),
+        .No => {}
     }
+    return .{ .visited = visited, .loop = loop };
 }
 
 fn parse_input(input: []const u8, alloc: *const Allocator) !Map {
@@ -190,8 +240,8 @@ fn parse_input(input: []const u8, alloc: *const Allocator) !Map {
     while (iter.next()) |line| {
         if (line.len > 0) {
             for (line, 0..) |char, idx| {
-                if (char == '^' or char == '>' or char == 'v' or char == '<') {
-                    map.setCursor((height * line.len) + idx, try Direction.from(char));
+                if (Direction.from(char)) |direction| {
+                    map.setCursor((height * line.len) + idx, direction);
                 }
                 try map.append(char);
             }
@@ -203,14 +253,49 @@ fn parse_input(input: []const u8, alloc: *const Allocator) !Map {
     return map;
 }
 
+test "day6" {
+    const test_input =
+\\....#.....
+\\.........#
+\\..........
+\\..#.......
+\\.......#..
+\\..........
+\\.#..^.....
+\\........#.
+\\#.........
+\\......#...
+;
+    var gp = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gp.deinit();
+
+    const alloc = gp.allocator();
+    var map = try parse_input(test_input, &alloc);
+    defer map.deinit();
+
+    const result = try solve(&map, &alloc, Print.Yes);
+
+    const expect: usize = 6;
+
+    std.testing.expect(result.loop == expect) catch {
+        std.debug.print("expected {}, got {}\n", .{expect, result.loop});
+    };
+}
+
+const Print = enum {
+    Yes,
+    No
+};
+
 pub fn run(alloc: *const Allocator) !void {
     const input = try read_input("puzzle_input/day6.txt", alloc);
     defer alloc.free(input);
-    errdefer alloc.free(input);
 
     var map = try parse_input(input, alloc);
     defer map.deinit();
-    errdefer map.deinit();
 
-    try part1(&map, alloc);
+    const result = try solve(&map, alloc, Print.No);
+
+    // part 1 = 5318, part 2 = 2064 -> too high
+    std.debug.print("part1: {}, part2: {}\n", .{result.visited, result.loop});
 }
