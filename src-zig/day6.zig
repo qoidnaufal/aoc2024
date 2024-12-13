@@ -140,7 +140,16 @@ const Map = struct {
         return self.data.items[self.nextIndex()];
     }
 
-    fn intersect(self: *const Self) usize {
+    fn leftSpot(self: *const Self) usize {
+        return switch (self.cursor.direction) {
+            .Up => self.cursor.idx - 1,
+            .Right => self.cursor.idx - self.width,
+            .Down => self.cursor.idx + 1,
+            .Left => self.cursor.idx + self.width,
+        };
+    }
+
+    fn rightSpot(self: *const Self) usize {
         return switch (self.cursor.direction) {
             .Up => self.cursor.idx + 1,
             .Right => self.cursor.idx + self.width,
@@ -149,39 +158,42 @@ const Map = struct {
         };
     }
 
-    // obstruction must have been visited with same direction
-    fn anticipateLoop(self: *const Self, buffer: *const []usize) bool {
+    fn anticipateLoop(self: *const Self, buffer: *const []AdjacentWall) bool {
         const curr = self.cursor.direction;
         var is_it = false;
-        for (buffer.*) |u| {
+        for (buffer.*) |wall| {
             switch (curr) {
                 .Up, => {
-                    if (self.cursor.idx - (self.cursor.idx % self.width) == u - (u % self.width)
-                        and self.cursor.idx < u
+                    if (self.cursor.idx - (self.cursor.idx % self.width) == wall.idx - (wall.idx % self.width)
+                        and self.cursor.idx < wall.idx
+                        and ((wall.dir == .Right and wall.hit) or (wall.dir == .Down and !wall.hit))
                     ) {
                         is_it = true;
                         break;
                     }
                 },
                 .Down => {
-                    if (self.cursor.idx - (self.cursor.idx % self.width) == u - (u % self.width)
-                        and self.cursor.idx > u
+                    if (self.cursor.idx - (self.cursor.idx % self.width) == wall.idx - (wall.idx % self.width)
+                        and self.cursor.idx > wall.idx
+                        and ((wall.dir == .Left and wall.hit) or (wall.dir == .Up and !wall.hit))
                     ) {
                         is_it = true;
                         break;
                     }
                 },
                 .Left => {
-                    if (self.cursor.idx % self.width == u % self.width
-                        and self.cursor.idx > u
+                    if (self.cursor.idx % self.width == wall.idx % self.width
+                        and self.cursor.idx > wall.idx
+                        and ((wall.dir == .Up and wall.hit) or (wall.dir == .Right and !wall.hit))
                     ) {
                         is_it = true;
                         break;
                     }
                 },
-                else => {
-                    if (self.cursor.idx % self.width == u % self.width
-                        and self.cursor.idx < u
+                .Right => {
+                    if (self.cursor.idx % self.width == wall.idx % self.width
+                        and self.cursor.idx < wall.idx
+                        and ((wall.dir == .Down and wall.hit) or (wall.dir == .Left and !wall.hit))
                     ) {
                         is_it = true;
                         break;
@@ -189,8 +201,8 @@ const Map = struct {
                 }
             }
         }
-        const sect = Direction.from(self.data.items[self.intersect()]) orelse self.cursor.direction;
-        return (curr.isNinetyDegree(sect) or is_it) and self.nextSpot() != '#';
+        const sect = Direction.from(self.data.items[self.rightSpot()]) orelse self.cursor.direction;
+        return (curr.isNinetyDegree(sect) or is_it) and self.nextSpot() != '#' and self.nextIndex() != self.start_idx;
     }
 };
 
@@ -199,24 +211,38 @@ const Result = struct {
     loop: usize,
 };
 
+const AdjacentWall = struct {
+    idx: usize,
+    dir: Direction,
+    hit: bool,
+};
+
 fn solve(map: *Map, alloc: *const Allocator, print: Print) !Result {
     var wallCount: usize = 0;
-    var wallHitBuffer = try alloc.alloc(usize, map.width * map.height);
-    defer alloc.free(wallHitBuffer);
+    var wallBuffer = try alloc.alloc(AdjacentWall, map.width * map.height);
+    defer alloc.free(wallBuffer);
+
+    var grid = try alloc.dupe(u8, map.data.items);
+    defer alloc.free(grid);
 
     var visited: usize = 1;
     var loop: usize = 0;
     while (!map.isHittingEdge()) {
         if (map.nextSpot() == '#') {
-            wallHitBuffer[wallCount] = map.nextIndex();
+            wallBuffer[wallCount] = .{ .idx = map.nextIndex(), .hit = true, .dir = map.cursor.direction };
             wallCount += 1;
             map.changeDirection();
+        }
+        if (map.data.items[map.leftSpot()] == '#') {
+            wallBuffer[wallCount] = .{ .idx = map.leftSpot(), .hit = false, .dir = map.cursor.direction };
+            wallCount += 1;
         }
 
         const next = map.nextIndex();
         if (map.data.items[next] == '.') visited += 1;
-        if (map.anticipateLoop(&wallHitBuffer[0..wallCount])) {
-            std.debug.print("blocker: {}\n", .{next});
+        if (map.anticipateLoop(&wallBuffer[0..wallCount])) {
+            // std.debug.print("blocker: {}\n", .{next});
+            grid[next] = 'O';
             loop += 1;
         }
 
@@ -226,10 +252,30 @@ fn solve(map: *Map, alloc: *const Allocator, print: Print) !Result {
 
     map.last_idx = map.cursor.idx;
     switch (print) {
+        .Loop => printGrid(&grid, map.width, map.start_idx, map.last_idx),
         .Yes => map.printFinalGrid(),
         .No => {}
     }
+    
     return .{ .visited = visited, .loop = loop };
+}
+
+fn printGrid(grid: *[]u8, width: usize, start_idx: usize, last_idx: usize) void {
+    var line_count: usize = 0;
+    var row_count: usize = 0;
+    for (grid.*) |c| {
+        if (row_count % width == 0) {
+            std.debug.print("{d: >4} | ", .{line_count});
+            line_count += 1;
+        }
+        row_count += 1;
+        std.debug.print("{c}", .{c});
+        if (row_count % width == 0) {
+            if (line_count == (start_idx - (start_idx % width)) / width + 1) std.debug.print(" <<-- Start", .{});
+            if (line_count == (last_idx - (last_idx % width)) / width + 1) std.debug.print(" <<-- End", .{});
+            std.debug.print("\n", .{});
+        }
+    }
 }
 
 fn parse_input(input: []const u8, alloc: *const Allocator) !Map {
@@ -273,7 +319,7 @@ test "day6" {
     var map = try parse_input(test_input, &alloc);
     defer map.deinit();
 
-    const result = try solve(&map, &alloc, Print.Yes);
+    const result = try solve(&map, &alloc, Print.Loop);
 
     const expect: usize = 6;
 
@@ -283,6 +329,7 @@ test "day6" {
 }
 
 const Print = enum {
+    Loop,
     Yes,
     No
 };
@@ -294,8 +341,9 @@ pub fn run(alloc: *const Allocator) !void {
     var map = try parse_input(input, alloc);
     defer map.deinit();
 
-    const result = try solve(&map, alloc, Print.No);
+    const result = try solve(&map, alloc, Print.Loop);
 
-    // part 1 = 5318, part 2 = 2064 -> too high
+    // part 1 = 5318
+    // part 2 = [ 2064 -> too high, 822 -> too low, 2683 -> F!!!, 1903 -> wrong ]
     std.debug.print("part1: {}, part2: {}\n", .{result.visited, result.loop});
 }
